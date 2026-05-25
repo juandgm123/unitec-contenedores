@@ -80,13 +80,21 @@
       return;
     }
     let restored = 0;
+    const changedKeys = [];
     for (const row of data || []) {
       const localRaw = originalGetItem.call(localStorage, row.key);
       const remoteRaw = JSON.stringify(row.value);
       if (localRaw !== remoteRaw) {
         originalSetItem.call(localStorage, row.key, remoteRaw);
         restored++;
+        changedKeys.push(row.key);
       }
+    }
+    // Avisar a la app que llegaron cambios remotos para que re-renderice
+    if (changedKeys.length > 0) {
+      window.dispatchEvent(new CustomEvent('supabaseRemoteChange', {
+        detail: { keys: changedKeys }
+      }));
     }
     showStatus(restored > 0 ? `✅ ${restored} datasets restaurados` : '✅ Datos sincronizados');
   }
@@ -156,9 +164,12 @@
       ready = true;
       window.__supabaseSync = { client: supabaseClient, hydrate, doPush, status: () => ready };
       console.log('[SupabaseSync] activo — workspace:', WORKSPACE);
+      window.dispatchEvent(new CustomEvent('supabaseSyncReady'));
     } catch (e) {
       console.error('[SupabaseSync] init falló:', e);
       showStatus('⚠️ Sin sync — datos solo locales', true);
+      // Avisar igual para que la app pueda renderizar con localStorage solo
+      window.dispatchEvent(new CustomEvent('supabaseSyncReady', { detail: { failed: true } }));
     }
   })();
 

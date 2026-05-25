@@ -2321,8 +2321,38 @@ function exportData() {
 document.getElementById('editModal').addEventListener('click', function(e) { if (e.target.id === 'editModal') closeModal(); });
 document.getElementById('productsModal').addEventListener('click', function(e) { if (e.target.id === 'productsModal') closeProductsModal(); });
 
-// Init
-init();
+// Init — espera a que el shim Supabase hidrate localStorage antes de pintar.
+// Timeout 3s por si Supabase está caído, así igual arranca la app.
+(function bootstrapWithSync() {
+  var booted = false;
+  function boot() {
+    if (booted) return;
+    booted = true;
+    init();
+  }
+  // Si el shim ya terminó (event ya disparado o ready=true), arranca inmediato
+  if (window.__supabaseSync && window.__supabaseSync.status && window.__supabaseSync.status()) {
+    boot();
+  } else {
+    window.addEventListener('supabaseSyncReady', boot, { once: true });
+    setTimeout(boot, 3000); // failsafe: arranca con localStorage solo si Supabase tarda
+  }
+})();
+
+// Re-renderizar si llegan cambios remotos (otro usuario editó / auto-resync cada 60s)
+window.addEventListener('supabaseRemoteChange', function(e) {
+  if (e.detail && e.detail.keys && e.detail.keys.indexOf('bi_containers_v70') !== -1) {
+    var saved = localStorage.getItem('bi_containers_v70');
+    if (saved) {
+      try {
+        containers = JSON.parse(saved);
+        renderContainers();
+        updateStats();
+        showToast('🔄 Datos actualizados desde la nube', 'success');
+      } catch(err) { console.error('[remote-change] parse error:', err); }
+    }
+  }
+});
 
 
 // ===== LIGHTBOX =====
